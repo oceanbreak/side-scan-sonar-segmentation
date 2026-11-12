@@ -1,8 +1,6 @@
 torch==2.7.1
 torchvision==0.22.1
-jupyter
-pandas
-tochmetrics
-tdqm
-pillow
-matplotlib
+numpy>=1.24,<3
+Pillow>=9.1,<12
+matplotlib>=3.7,<4
+tqdm>=4.65,<5

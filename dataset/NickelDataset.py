@@ -109,7 +109,7 @@ class NikelDataset(Dataset):
         masks = []
 
         # вытаскиваем пиксели, принадлежащие классам .
-        for i in [0, 1, 7, 10]:
+        for i in [1, 2, 3, 4]:
             # генерируем бинарную маску сегментации для текущего класса i
             cls_mask = torch.where(mask==i, 1, 0)
             masks.append(cls_mask[0,:,:].numpy())

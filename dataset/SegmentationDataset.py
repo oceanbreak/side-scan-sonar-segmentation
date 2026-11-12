@@ -67,7 +67,7 @@ class SegmentationDataset(Dataset):
     Bottom remainders smaller than patch_height are discarded.
     resize=(height, width) uses bilinear images and nearest-neighbor masks.
     """
-    def __init__(self, pairs, class_values=(0, 1, 7, 10), patch_height=None,
+    def __init__(self, pairs, class_values=(1, 2, 3, 4), patch_height=None,
                  resize=None):
         self.pairs = list(pairs)
         self.class_values = tuple(class_values)

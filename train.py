@@ -103,7 +103,7 @@ def main():
     parser.add_argument('--images', required=True)
     parser.add_argument('--masks', required=True)
     parser.add_argument('--model', choices=('cnn', 'unet'), default='cnn')
-    parser.add_argument('--class-values', nargs='+', type=int, default=[0, 1, 7, 10],
+    parser.add_argument('--class-values', nargs='+', type=int, default=[1, 2, 3, 4],
                         help='Raw values for class-index masks; unused for class-folder binary masks')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=4)

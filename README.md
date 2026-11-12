@@ -39,7 +39,7 @@ folder in this order wins. The model automatically gets **N+1 output channels**.
 This creates one exclusive class per pixel, not multilabel predictions.
 
 Flat single-channel class-index masks are still supported: filenames match
-source stems, and `--class-values 0 1 7 10` maps raw values to consecutive labels.
+source stems, and `--class-values 1 2 3 4` maps raw values to consecutive labels.
 That option is ignored for class-folder masks. Images are converted to 8-bit
 grayscale and normalized to [-1, 1].
 

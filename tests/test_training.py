@@ -26,7 +26,7 @@ class TrainingTest(unittest.TestCase):
         self.masks.mkdir()
         for i in range(3):
             Image.fromarray(np.full((16, 12), 50 + i * 50, np.uint8)).save(self.images / f'{i}.png')
-            mask = np.tile(np.array([0, 1, 7, 10], np.uint8), (16, 3))
+            mask = np.tile(np.array([1, 2, 3, 4], np.uint8), (16, 3))
             Image.fromarray(mask).save(self.masks / f'{i}.png')
         torch.set_num_threads(2)
 

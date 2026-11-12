@@ -82,5 +82,66 @@ class TrainingTest(unittest.TestCase):
             self.assertTrue((output / 'loss.png').is_file())
 
 
+class BinaryMasksTest(TrainingTest):
+    def setUp(self):
+        super().setUp()
+        for path in self.masks.iterdir():
+            path.unlink()
+        for name in ('10', '2', '1'):
+            folder = self.masks / name
+            folder.mkdir()
+            for i in range(3):
+                mask = np.zeros((16, 12), np.uint8)
+                # Overlap at column 4; class 10 takes priority over class 2.
+                if name == '1':
+                    mask[:, 1:3] = 255
+                elif name == '2':
+                    mask[:, 3:5] = 255
+                else:
+                    mask[:, 4:6] = 255
+                Image.fromarray(mask).save(folder / f'{i}.png')
+
+    # Binary fixtures differ from the parent tests' class-index fixtures.
+    def test_patches_and_mapping(self):
+        pairs = discover_pairs(self.images, self.masks)
+        data = SegmentationDataset(pairs, patch_height=8)
+        self.assertEqual(data.class_names, ['background', '1', '2', '10'])
+        self.assertEqual(data.num_classes, 4)
+        self.assertEqual(len(data), 6)
+        x, target = data[5]
+        self.assertEqual(x.shape, (1, 8, 12))
+        np.testing.assert_array_equal(target[0].numpy(), [0, 1, 1, 2, 3, 3, 0, 0, 0, 0, 0, 0])
+        resized = SegmentationDataset(pairs, resize=(8, 24))
+        self.assertEqual(set(resized[0][1].unique().tolist()), {0, 1, 2, 3})
+
+    def test_invalid_pairs_and_labels(self):
+        (self.masks / '2' / '1.png').unlink()
+        with self.assertRaisesRegex(ValueError, 'for class 2'):
+            discover_pairs(self.images, self.masks)
+
+    def test_binary_cli_class_count(self):
+        # Two foreground classes plus background must produce THREE channels.
+        for path in (self.masks / '10').iterdir():
+            path.unlink()
+        (self.masks / '10').rmdir()
+        output = self.root / 'binary-cli'
+        result = subprocess.run([
+            sys.executable, 'train.py', '--images', str(self.images), '--masks', str(self.masks),
+            '--epochs', '1', '--resize', '8', '12', '--device', 'cpu',
+            '--output-dir', str(output),
+        ], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        config = json.loads((output / 'config.json').read_text())
+        self.assertEqual(config['class_names'], ['background', '1', '2'])
+        self.assertEqual(config['num_classes'], 3)
+        checkpoint = torch.load(output / 'last.pt', weights_only=True)
+        self.assertEqual(checkpoint['model_state_dict']['network.6.weight'].shape[0], 3)
+
+    def test_mask_size_mismatch(self):
+        Image.fromarray(np.zeros((3, 4), np.uint8)).save(self.masks / '1' / '0.png')
+        with self.assertRaisesRegex(ValueError, 'size mismatch'):
+            SegmentationDataset(discover_pairs(self.images, self.masks))
+
+
 if __name__ == '__main__':
     unittest.main()

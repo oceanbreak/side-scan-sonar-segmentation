@@ -103,7 +103,8 @@ def main():
     parser.add_argument('--images', required=True)
     parser.add_argument('--masks', required=True)
     parser.add_argument('--model', choices=('cnn', 'unet'), default='cnn')
-    parser.add_argument('--class-values', nargs='+', type=int, default=[0, 1, 7, 10])
+    parser.add_argument('--class-values', nargs='+', type=int, default=[0, 1, 7, 10],
+                        help='Raw values for class-index masks; unused for class-folder binary masks')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=4)
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -135,10 +136,12 @@ def main():
     loader_options = dict(batch_size=args.batch_size, num_workers=args.num_workers)
     train_loader = DataLoader(train_data, shuffle=True, **loader_options)
     val_loader = DataLoader(val_data, **loader_options) if val_data is not None else None
-    model = (BasicCNN if args.model == 'cnn' else BasicUnet)(num_classes=len(args.class_values))
+    model = (BasicCNN if args.model == 'cnn' else BasicUnet)(num_classes=train_data.num_classes)
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    (output / 'config.json').write_text(json.dumps(vars(args), indent=2))
+    config = dict(vars(args), class_names=train_data.class_names,
+                  num_classes=train_data.num_classes, binary_masks=train_data.binary_masks)
+    (output / 'config.json').write_text(json.dumps(config, indent=2))
     print(f'{type(model).__name__}: {len(train_data)} training patches, '
           f'{len(val_data) if val_data is not None else 0} validation patches')
     fit(model, train_loader, val_loader, epochs=args.epochs, lr=args.lr,

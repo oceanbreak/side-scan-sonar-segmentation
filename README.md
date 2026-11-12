@@ -9,16 +9,43 @@ binary segmentation masks for each class
 Segmented SSS image of the same size
 ## Training CNN and U-Net
 
-Place images and **single-channel class-index masks** in separate directories.
-Names must match by relative filename stem (for example `images/scan1.jpg` and
-`masks/scan1.png`). Masks should use lossless formats. Separate binary masks
-per class must first be combined into one class-index image. Defaults map raw
-mask values `0, 1, 7, 10` to targets `0, 1, 2, 3`; unknown values raise an error.
-Images are converted to 8-bit grayscale and normalized to [-1, 1].
+The loader automatically supports your per-class binary mask layout:
+
+```text
+IMAGE/
+  01.png
+  02.png
+MASKS/
+  1/
+    01.png
+    02.png
+  2/
+    01.png
+    02.png
+  ...
+```
+
+Each class folder must contain a mask matching every source image by filename
+stem (extensions may differ). Missing/extra masks, duplicate stems, or mismatched
+image/mask dimensions raise an error. Use lossless mask formats such as PNG.
+White/nonzero pixels belong to the class; black pixels do not. RGB binary masks
+are converted to grayscale. Use all-black masks when a class is absent.
+
+Background is label **0**. Class folders sort numerically if all names are
+numeric, otherwise alphabetically, and map to labels **1..N**. For example,
+folders `1`, `2`, `10` map to labels `1`, `2`, `3`. If masks overlap, the later
+folder in this order wins. The model automatically gets **N+1 output channels**.
+`config.json` saves `class_names` (in output-channel order) and `num_classes`.
+This creates one exclusive class per pixel, not multilabel predictions.
+
+Flat single-channel class-index masks are still supported: filenames match
+source stems, and `--class-values 0 1 7 10` maps raw values to consecutive labels.
+That option is ignored for class-folder masks. Images are converted to 8-bit
+grayscale and normalized to [-1, 1].
 
 ```bash
 source .venv/bin/activate
-python train.py --images /path/to/images --masks /path/to/masks \
+python train.py --images /path/to/IMAGE --masks /path/to/MASKS \
   --model unet --epochs 20 --batch-size 4 --resize 256 256 \
   --plot --output-dir /workspace/runs/unet
 ```

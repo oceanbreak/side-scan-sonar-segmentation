@@ -24,16 +24,26 @@ def pair_files(images_dir, masks_dir):
                     if p.is_file() and p.suffix.lower() in extensions)
     if not images:
         raise ValueError('No input images found')
-    masks = [Path(masks_dir) / p.name for p in images]
-    missing = [str(p) for p in masks if not p.is_file()]
+    class_dirs = {}
+    for directory in sorted(Path(masks_dir).iterdir()):
+        if directory.is_dir() and directory.name.isdecimal():
+            class_id = int(directory.name)
+            if class_id in class_dirs:
+                raise ValueError(f'Duplicate class directory: {directory}')
+            class_dirs[class_id] = directory
+    if not class_dirs or not (set(class_dirs) - {0}):
+        raise ValueError('Expected binary masks in mask/<class_id>/<image_filename>')
+    masks = [{class_id: directory / image.name for class_id, directory in class_dirs.items()}
+             for image in images]
+    missing = [str(path) for mask_set in masks for path in mask_set.values() if not path.is_file()]
     if missing:
         raise ValueError(f'Missing same-filename masks: {missing}')
     return images, masks
 
 
-def run_epoch(model, loader, device, optimizer=None):
+def run_epoch(model, loader, device, optimizer=None, num_classes=4):
     model.train(optimizer is not None)
-    confusion = torch.zeros((4, 4), dtype=torch.int64, device=device)
+    confusion = torch.zeros((num_classes, num_classes), dtype=torch.int64, device=device)
     loss_sum, pixels = 0.0, 0
     with torch.set_grad_enabled(optimizer is not None):
         for images, targets in loader:
@@ -96,8 +106,10 @@ def main():
         if args.device == 'auto' else torch.device(args.device)
     images, masks = pair_files(args.images, args.masks)
     datasets = {split: NikelDataset(images, masks, config['patch_height'],
-                                   split=split, train_fraction=config['train_fraction'])
+                                   split=split, train_fraction=config['train_fraction'],
+                                   class_priority=config.get('class_priority'))
                 for split in ('train', 'test')}
+    class_values = datasets['train'].class_values
     channels = datasets['train'][0][0].shape[0]
     for path in images:
         with Image.open(path) as image:
@@ -116,7 +128,8 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     (output / 'config.json').write_text(json.dumps(config, indent=2))
     # Record exact spatial boundaries independently of patch height.
-    manifest = [dict(image=str(image.resolve()), mask=str(mask.resolve()),
+    manifest = [dict(image=str(image.resolve()),
+                     masks={str(c): str(path.resolve()) for c, path in mask.items()},
                      width=region[2], height=test_region[1],
                      train_y=[region[0], region[1]],
                      test_y=[test_region[0], test_region[1]])
@@ -125,17 +138,18 @@ def main():
     (output / 'split.json').write_text(json.dumps(manifest, indent=2))
     print(f'Device: {device}; patches: ' + ', '.join(
         f'{split}={len(ds)}' for split, ds in datasets.items()), flush=True)
-    model = BasicCNN(in_channels=channels).to(device)
+    model = BasicCNN(in_channels=channels, num_classes=len(class_values)).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=config['learning_rate'])
     history = []
     for epoch in range(1, config['epochs'] + 1):
         row = {'epoch': epoch}
         for split in ('train', 'test'):
             loss, miou, per_class = run_epoch(
-                model, loaders[split], device, optimizer if split == 'train' else None)
+                model, loaders[split], device, optimizer if split == 'train' else None,
+                num_classes=len(class_values))
             row.update({f'{split}_loss': loss, f'{split}_miou': miou})
             row.update({f'{split}_iou_{value}': score for value, score in
-                        zip(NikelDataset.class_values, per_class)})
+                        zip(class_values, per_class)})
         history.append(row)
         with (output / 'history.csv').open('w', newline='') as stream:
             writer = csv.DictWriter(stream, fieldnames=list(row))
@@ -144,7 +158,8 @@ def main():
         save_plot(history, output)
         torch.save({'model': model.state_dict(), 'optimizer': optimizer.state_dict(),
                     'epoch': epoch, 'config': config, 'in_channels': channels,
-                    'class_values': NikelDataset.class_values}, output / 'last.pt')
+                    'class_values': class_values,
+                    'class_priority': datasets['train'].class_priority}, output / 'last.pt')
         print(f"Epoch {epoch}: train loss={row['train_loss']:.4f}, "
               f"mIoU={row['train_miou']:.4f}; test loss={row['test_loss']:.4f}, "
               f"mIoU={row['test_miou']:.4f}", flush=True)

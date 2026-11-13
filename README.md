@@ -14,20 +14,47 @@ prepared cloud environment, activate `source .venv/bin/activate`.
 For a fresh environment, install a suitable CPU/CUDA PyTorch build first, then
 run `python -m pip install -r requirements.txt`.
 
-Place sonar images in one directory and matching **same-filename** class-ID
-masks in another. Supported image extensions: PNG, JPEG, TIFF, BMP. Images can
-be 8-bit grayscale (`L`) or RGB, with the same channel mode throughout a run.
-Masks must be single-channel integer class maps with values **0, 1, 7, 10**
-(mapped internally to 0, 1, 2, 3), and match the source image dimensions.
-Use lossless mask files. Separate binary masks per class must first be combined
-into one class-ID map; overlapping binary masks are not resolved by this runner.
+Place sonar images and their per-class binary masks in this structure:
+
+```text
+path/
+  img/01.png
+  img/02.png
+  mask/1/01.png
+  mask/1/02.png
+  mask/7/01.png
+  mask/7/02.png
+  mask/10/01.png
+  mask/10/02.png
+```
+
+Class IDs are discovered from numeric subdirectory names under `mask/`; any
+nonnegative integer class IDs are supported. Every image must have a mask with
+exactly the same filename in every discovered class directory, including an
+all-zero mask when that class is absent. Missing files and dimension mismatches
+raise errors rather than silently treating missing annotations as background.
+
+Images can be 8-bit grayscale (`L`) or RGB, with the same channel mode throughout
+a run. Masks must be single-channel binary images (0/1 or 0/255), stored losslessly
+and matching source dimensions. Nonzero pixels mark membership in that class.
+Pixels outside all foreground masks become background (class 0); an optional
+`mask/0/` directory does not override foreground classes. Class IDs are mapped to
+contiguous training labels, and the original IDs are retained in CSV/checkpoints.
+
+Masks are cropped at identical Y coordinates, then combined **per patch**.
+By default, the highest numeric foreground class wins where masks overlap:
+for classes 1, 7, 10, priority is 10 > 7 > 1. To override, add `"class_priority":
+[10, 7, 1]` to a run JSON: list every foreground class once, **lowest to highest**
+priority (the last entry wins). This example makes class 1 win. No source files
+are modified or combined on disk. Direct Python callers can still supply legacy
+combined class-ID mask paths for classes 0, 1, 7, 10 to `NikelDataset`.
 
 Run each experiment from the repository root:
 
 ```bash
-python train.py --config runs/patch_64.json --images /path/images --masks /path/masks
-python train.py --config runs/patch_128.json --images /path/images --masks /path/masks
-python train.py --config runs/patch_256.json --images /path/images --masks /path/masks
+python train.py --config runs/patch_64.json --images /path/img --masks /path/mask
+python train.py --config runs/patch_128.json --images /path/img --masks /path/mask
+python train.py --config runs/patch_256.json --images /path/img --masks /path/mask
 ```
 
 The three run files differ only in patch height (64, 128, 256). All use the same
@@ -63,7 +90,7 @@ Each run creates `outputs/patch_<height>/` containing:
 
 - `curves.png`: train/test cross-entropy loss and mean IoU versus epoch.
 - `history.csv`: loss, mean IoU, and IoU for each original class ID, per epoch.
-- `last.pt`: final model/optimizer state, epoch, class mapping, and configuration.
+- `last.pt`: final model/optimizer state, epoch, class mapping, overlap priority, and configuration.
 - `config.json` and `split.json`: run settings, source paths, and exact Y boundaries.
 
 IoU is intersection / union, accumulated over **all pixels in the epoch**, then

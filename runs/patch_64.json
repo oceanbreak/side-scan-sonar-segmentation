@@ -1,0 +1,9 @@
+{
+  "patch_height": 64,
+  "train_fraction": 0.8,
+  "epochs": 20,
+  "batch_size": 1,
+  "learning_rate": 0.001,
+  "num_workers": 0,
+  "seed": 42
+}

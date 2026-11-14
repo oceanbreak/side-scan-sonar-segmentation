@@ -67,6 +67,19 @@ class PatchTrainingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'dimensions'):
             PatchDataset(self.samples, 8)
 
+    def test_rgb_and_rgba_masks_match_single_channel_masks(self):
+        dataset = PatchDataset(self.samples, 10)
+        expected = [dataset[i][1].clone() for i in range(len(dataset))]
+        for mode in ('RGB', 'RGBA'):
+            with self.subTest(mode=mode):
+                for sample in self.samples:
+                    for path in sample.masks:
+                        with Image.open(path) as mask:
+                            converted = mask.convert(mode)
+                        converted.save(path)
+                for index, target in enumerate(expected):
+                    self.assertTrue(torch.equal(dataset[index][1], target))
+
     def test_missing_mask_fails(self):
         self.samples[0].masks[2].unlink()
         with self.assertRaisesRegex(ValueError, 'Missing masks'):
@@ -104,6 +117,11 @@ class PatchTrainingTests(unittest.TestCase):
         import nbformat
         from nbclient import NotebookClient
 
+        # Reproduce the user's black/white three-channel PNG mask layout.
+        for path in (self.root / 'mask').glob('*/*.png'):
+            with Image.open(path) as mask:
+                converted = mask.convert('RGB')
+            converted.save(path)
         repository = Path(__file__).resolve().parents[1]
         notebook = nbformat.read(repository / 'patch_training_run.ipynb', as_version=4)
         config = notebook.cells[1]

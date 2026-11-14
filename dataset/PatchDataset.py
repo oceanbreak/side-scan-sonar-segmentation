@@ -69,7 +69,8 @@ def split_samples(samples, validation_fraction=0.2, seed=42):
 class PatchDataset(Dataset):
     """Nonoverlapping square tiles; padded/optionally unlabelled pixels are ignored.
 
-    Masks must be single-channel binary images (zero/nonzero). Overlapping class
+    Masks may be single-channel or RGB/RGBA binary images (black/nonblack).
+    Alpha is ignored. Overlapping class
     masks are rejected. background_class=None rejects any unlabelled pixels;
     otherwise unlabelled pixels belong to the explicitly selected class ID.
     """
@@ -109,9 +110,14 @@ class PatchDataset(Dataset):
         masks = []
         for path in sample.masks:
             with Image.open(path) as mask:
-                values = np.array(mask.crop(box))
+                tile = mask.crop(box)
+                if mask.mode in ('RGB', 'RGBA'):
+                    # Ignore alpha: opaque black is still background.
+                    values = np.any(np.array(tile.convert('RGB')) != 0, axis=-1)
+                else:
+                    values = np.array(tile)
             if values.ndim != 2:
-                raise ValueError(f'Expected single-channel binary mask: {path}')
+                raise ValueError(f'Expected single-channel or RGB/RGBA binary mask: {path}')
             masks.append(values != 0)
         masks = np.stack(masks)
         coverage = masks.sum(axis=0)

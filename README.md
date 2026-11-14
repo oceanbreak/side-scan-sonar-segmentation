@@ -31,8 +31,9 @@ The notebook expects `DATA_ROOT/image/<name>.<ext>` and
 `DATA_ROOT/mask/<class number>/<name>.<ext>` for each of exactly four numeric
 class folders. Filename stems must match; extensions may differ. Numeric folder
 names are sorted and mapped to IDs 0–3, including noncontiguous numbers such as
-0, 1, 7, 10. Masks are single-channel binary images with nonzero pixels marking
-a class. All four masks must exist for every source image. Overlaps are rejected.
+0, 1, 7, 10. Masks may be single-channel or RGB/RGBA PNGs: black means absent,
+white (or any nonzero color channel) marks a class. Alpha is ignored. All four
+masks must exist for every source image. Overlaps are rejected.
 Uncovered pixels raise an error unless `BACKGROUND_CLASS` explicitly selects
 one of the four class IDs. Input images must be 8-bit; grayscale is supported
 and RGB inputs are converted to grayscale.
